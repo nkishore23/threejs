@@ -3,7 +3,6 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
-import WebGLDiagnostic from "./WebGLDiagnostic";
 
 function Model({ color }) {
   const { scene } = useGLTF("/models/image_10.glb");
@@ -61,7 +60,6 @@ export default function App() {
         }}
       />
 
-      <WebGLDiagnostic />
 
       <Canvas
         gl={() => glRenderer}
