@@ -54,7 +54,7 @@ export default function App() {
         onChange={(e) => setColor(e.target.value)}
         style={{
           position: "absolute",
-          top: 20,
+          top: 200,
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 10,
