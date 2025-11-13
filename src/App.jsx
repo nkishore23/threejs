@@ -1,8 +1,9 @@
-import React, { useState, Suspense } from "react";
+import React, { useState, Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
+import WebGLDiagnostic from "./WebGLDiagnostic";
 
 function Model({ color }) {
   const { scene } = useGLTF("/models/image_10.glb");
@@ -29,6 +30,22 @@ function Loader() {
 export default function App() {
   const [color, setColor] = useState("#ff0000");
 
+  //  Create a WebGL1 context manually
+  const glRenderer = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    const context =
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+    if (!context) {
+      console.error(" WebGL1 not supported in this browser");
+      return null;
+    }
+
+    console.log("Using WebGL1 context");
+    const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true });
+    return renderer;
+  }, []);
+
   return (
     <div className="App">
       <input
@@ -44,7 +61,10 @@ export default function App() {
         }}
       />
 
+      <WebGLDiagnostic />
+
       <Canvas
+        gl={() => glRenderer}
         camera={{ position: [0, 1, 5], fov: 45 }}
         style={{ height: "100vh", background: "#111" }}
       >
