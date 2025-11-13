@@ -47,9 +47,6 @@ export default function WebGLDiagnostic() {
     return (
         <div
             style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
                 background: "#222",
                 color: "#0f0",
                 padding: "10px",
