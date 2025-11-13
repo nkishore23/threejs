@@ -54,7 +54,7 @@ export default function WebGLDiagnostic() {
                 fontFamily: "monospace",
                 fontSize: "14px",
                 zIndex: 1000,
-                marginBottom: "50px";
+                marginBottom: "50px"
             }}
         >
             {info.error ? (
