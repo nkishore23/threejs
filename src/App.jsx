@@ -9,8 +9,6 @@ function Model({ colors }) {
   useEffect(() => {
     scene.traverse((child) => {
       if (child.isMesh) {
-        console.log("Mesh Name:", child.name);
-        
         if (child.name === "Body_Front_2_1") {
           child.material.color.set(colors.bodyFront);
           child.material.needsUpdate = true;
@@ -47,21 +45,38 @@ function App() {
 
   return (
     <div className="App">
-      <input
-        type="color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
-        style={{
-          position: "absolute",
-          top: 200,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-        }}
-      />
-
-      <WebGLDiagnostic />
-
+      <div className="controls">
+        <div>
+          <label>
+            Body Front Color:
+            <input
+              type="color"
+              value={colors.bodyFront}
+              onChange={handleColorChange("bodyFront")}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Sleeves Color:
+            <input
+              type="color"
+              value={colors.sleeves}
+              onChange={handleColorChange("sleeves")}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Pattern Color:
+            <input
+              type="color"
+              value={colors.pattern1}
+              onChange={handleColorChange("pattern1")}
+            />
+          </label>
+        </div>
+      </div>
       <Canvas
         style={{ height: "100vh", background: "#ffffff" }}
         camera={{ position: [0, 0, 5], fov: 50 }}
