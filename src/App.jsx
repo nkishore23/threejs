@@ -47,38 +47,21 @@ function App() {
 
   return (
     <div className="App">
-      <div className="controls">
-        <div>
-          <label>
-            Body Front Color:
-            <input
-              type="color"
-              value={colors.bodyFront}
-              onChange={handleColorChange("bodyFront")}
-            />
-          </label>
-        </div>
-        <div>
-          <label>
-            Sleeves Color:
-            <input
-              type="color"
-              value={colors.sleeves}
-              onChange={handleColorChange("sleeves")}
-            />
-          </label>
-        </div>
-        <div>
-          <label>
-            Pattern Color:
-            <input
-              type="color"
-              value={colors.pattern1}
-              onChange={handleColorChange("pattern1")}
-            />
-          </label>
-        </div>
-      </div>
+      <input
+        type="color"
+        value={color}
+        onChange={(e) => setColor(e.target.value)}
+        style={{
+          position: "absolute",
+          top: 200,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
+        }}
+      />
+
+      <WebGLDiagnostic />
+
       <Canvas
         style={{ height: "100vh", background: "#ffffff" }}
         camera={{ position: [0, 0, 5], fov: 50 }}
