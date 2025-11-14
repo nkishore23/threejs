@@ -1,81 +1,97 @@
-import React, { useState, Suspense, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment, Html } from "@react-three/drei";
-import * as THREE from "three";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import "./App.css";
-import WebGLDiagnostic from "./WebGLDiagnostic";
 
-function Model({ color }) {
+function Model({ colors }) {
   const { scene } = useGLTF("/models/image_10.glb");
 
-  scene.traverse((child) => {
-    if (child.isMesh && child.material) {
-      child.material.color = new THREE.Color(color);
-      child.material.metalness = 0.3;
-      child.material.roughness = 0.5;
-    }
+  useEffect(() => {
+    scene.traverse((child) => {
+      if (child.isMesh) {
+        console.log("Mesh Name:", child.name);
+        
+        if (child.name === "Body_Front_2_1") {
+          child.material.color.set(colors.bodyFront);
+          child.material.needsUpdate = true;
+        }
+        if (child.name === "Sleeves_5_1") {
+          child.material.color.set(colors.sleeves);
+          child.material.needsUpdate = true;
+        }
+        if (child.name === "Pattern_577026_1") {
+          child.material.color.set(colors.pattern1);
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+  }, [colors, scene]);
+
+  return <primitive object={scene} />;
+}
+
+function App() {
+  const [colors, setColors] = useState({
+    bodyFront: "#ff0000",
+    sleeves: "#00ff00",
+    pattern1: "#0000ff",
   });
 
-  return <primitive object={scene} scale={3} position={[0, -1, 0]} />;
-}
-
-function Loader() {
-  return (
-    <Html center>
-      <p style={{ color: "white" }}>Loading 3D Model...</p>
-    </Html>
-  );
-}
-
-export default function App() {
-  const [color, setColor] = useState("#ff0000");
-
-  //  Create a WebGL1 context manually
-  const glRenderer = useMemo(() => {
-    const canvas = document.createElement("canvas");
-    const context =
-      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-
-    if (!context) {
-      console.error(" WebGL1 not supported in this browser");
-      return null;
-    }
-
-    console.log("Using WebGL1 context");
-    const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true });
-    return renderer;
-  }, []);
+  const handleColorChange = (part) => (event) => {
+    const newColor = event.target.value;
+    setColors((prevColors) => ({
+      ...prevColors,
+      [part]: newColor,
+    }));
+  };
 
   return (
     <div className="App">
-      <input
-        type="color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
-        style={{
-          position: "absolute",
-          top: 200,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-        }}
-      />
-
-      <WebGLDiagnostic />
-
+      <div className="controls">
+        <div>
+          <label>
+            Body Front Color:
+            <input
+              type="color"
+              value={colors.bodyFront}
+              onChange={handleColorChange("bodyFront")}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Sleeves Color:
+            <input
+              type="color"
+              value={colors.sleeves}
+              onChange={handleColorChange("sleeves")}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Pattern Color:
+            <input
+              type="color"
+              value={colors.pattern1}
+              onChange={handleColorChange("pattern1")}
+            />
+          </label>
+        </div>
+      </div>
       <Canvas
-        gl={() => glRenderer}
-        camera={{ position: [0, 1, 5], fov: 45 }}
-        style={{ height: "100vh", background: "#111" }}
+        style={{ height: "100vh", background: "#ffffff" }}
+        camera={{ position: [0, 0, 5], fov: 50 }}
       >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 5, 5]} intensity={1.5} />
-        <Suspense fallback={<Loader />}>
-          <Model color={color} />
-          <Environment preset="sunset" />
-        </Suspense>
-        <OrbitControls enableDamping />
+        <ambientLight intensity={0.5} />
+        <spotLight position={[5, 5, 5]} angle={0.15} intensity={1} />
+        
+        <Model colors={colors} />
+
+        <OrbitControls target={[0, 0, 0]} />
       </Canvas>
     </div>
   );
 }
+
+export default App;
