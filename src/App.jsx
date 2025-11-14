@@ -5,7 +5,8 @@ import "./App.css";
 
 function Model({ colors }) {
   const { scene } = useGLTF("/models/image_10.glb");
-
+  window.model = scene;
+  scene.position.set(0, -1.5, 0);
   useEffect(() => {
     scene.traverse((child) => {
       if (child.isMesh) {
@@ -23,6 +24,7 @@ function Model({ colors }) {
         }
       }
     });
+    
   }, [colors, scene]);
 
   return <primitive object={scene} />;
@@ -78,7 +80,7 @@ function App() {
         </div>
       </div>
       <Canvas
-        style={{ height: "100vh", background: "#ffffff" }}
+        style={{ height: "50vh", width: "100%" }}
         camera={{ position: [0, 0, 5], fov: 50 }}
       >
         <ambientLight intensity={0.5} />
