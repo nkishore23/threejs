@@ -1,444 +1,444 @@
 import React, { useState, useEffect, Suspense, useRef } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Html } from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
 
-// --- Friendly Names Mapping ---
-const friendlyNames = {
-    "Body_Front_4_1": "Body Front",
-    "Sleeves": "Sleeves",
-    "Pattern": "Front Logo/Pattern",
-    // Add more mesh name mappings here
-};
-
-// ---------------------------------------------------------
-// LOADER
-// ---------------------------------------------------------
+const FONTS = [
+  "Arial",
+  "Impact",
+  "Roboto",
+  "Poppins",
+  "Times New Roman",
+  "Georgia",
+  "Courier New",
+  "Brush Script MT",
+];
 
 function Loader() {
-  return (
-    <Html center>
-      <div
-        style={{
-          color: "white",
-          padding: 20,
-          borderRadius: 8,
-          background: "rgba(0,0,0,0.8)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          fontSize: 18,
-          fontWeight: "bold",
-        }}
-      >
-        Loading 3D Model...
-      </div>
-    </Html>
-  );
+  return (
+    <Html center>
+      <div
+        style={{
+          color: "white",
+          padding: 20,
+          borderRadius: 8,
+          background: "rgba(0,0,0,0.8)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 18,
+          fontWeight: 700,
+        }}
+      >
+        Loading 3D Model...
+      </div>
+    </Html>
+  );
 }
-
-// ---------------------------------------------------------
-// AUTO-GENERATE UVs IF MISSING
-// ---------------------------------------------------------
-
-function ensureUVs(mesh) {
-  const geom = mesh.geometry;
-
-  // Already has UVs → skip
-  if (geom.attributes.uv) return;
-
-  console.warn("UVs missing → Auto-generating...", mesh.name);
-
-  geom.computeBoundingBox();
-  geom.computeBoundingSphere();
-
-  const pos = geom.attributes.position;
-  const uvs = [];
-
-  // Simple planar UV generation (Y projection)
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    // Normalize to 0-1 range
-    uvs.push((x + 1) / 2, (y + 1) / 2); 
-  }
-
-  geom.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geom.attributes.uv.needsUpdate = true;
-}
-
-// ---------------------------------------------------------
-// UTILITY — HANDLE MULTI-MATERIAL
-// ---------------------------------------------------------
 
 function forEachMaterial(mesh, fn) {
-  if (!mesh || !mesh.material) return;
-  if (Array.isArray(mesh.material)) mesh.material.forEach(fn);
-  else fn(mesh.material);
+  if (!mesh || !mesh.material) return;
+  if (Array.isArray(mesh.material)) mesh.material.forEach(fn);
+  else fn(mesh.material);
 }
 
 function setMeshColor(mesh, color) {
-  forEachMaterial(mesh, (mat) => {
-    mat.color.set(color);
-    mat.needsUpdate = true;
-  });
+  forEachMaterial(mesh, (mat) => {
+    mat.color.set(color);
+    if (mat.map) {
+      mat.map = null;
+    }
+    mat.needsUpdate = true;
+  });
 }
 
-// ---------------------------------------------------------
-// APPLY IMAGE / TEXTURE
-// ---------------------------------------------------------
+function Model({ colors, textConfig, logoConfig, logoImage }) {
+  const { scene } = useGLTF("/models/image_10.glb");
+  scene.position.set(0, -2, 0);
 
-function applyImageToMesh(mesh, texture) {
-  ensureUVs(mesh);
+  const bodyRef = useRef(null);
+  const textPlaneRef = useRef(null);
+  const logoPlaneRef = useRef(null);
 
-  forEachMaterial(mesh, (mat) => {
-    mat.map = texture;
-    mat.needsUpdate = true;
-  });
+  useEffect(() => {
+    scene.traverse((child) => {
+      if (!child.isMesh) return;
+      if (child.name.includes("Body_Front_4_1")) {
+        bodyRef.current = child;
+        setMeshColor(child, colors.bodyFront);
+      } else if (child.name.includes("Sleeves")) {
+        setMeshColor(child, colors.sleeves);
+      } else if (child.name.includes("Pattern")) {
+        setMeshColor(child, colors.pattern1);
+      }
+    });
+  }, [colors, scene]);
+
+  const createTextTexture = (text, color, fontFamily, fontSizePx, fontWeight, italic) => {
+    const canvas = document.createElement("canvas");
+    const ratio = 2;
+    canvas.width = 2048;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const style = `${italic ? "italic " : ""}${fontWeight === "bold" ? "700" : "400"} ${fontSizePx}px ${fontFamily}`;
+    ctx.font = style;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color || "#000";
+    ctx.lineWidth = Math.max(2, Math.floor(fontSizePx / 20));
+    ctx.strokeStyle = "rgba(255,255,255,0)";
+    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.needsUpdate = true;
+    return tex;
+  };
+
+  const createLogoTextureFromImage = (img) => {
+    if (!img) return null;
+    const canvas = document.createElement("canvas");
+    const w = 1024;
+    const h = 1024;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, w, h);
+    const ratio = Math.min(w / img.width, h / img.height);
+    const nw = img.width * ratio;
+    const nh = img.height * ratio;
+    ctx.drawImage(img, (w - nw) / 2, (h - nh) / 2, nw, nh);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.needsUpdate = true;
+    return tex;
+  };
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+
+    if (!body.geometry.boundingBox) body.geometry.computeBoundingBox();
+    const bb = body.geometry.boundingBox;
+    const width = bb.max.x - bb.min.x;
+    const height = bb.max.y - bb.min.y;
+    const centerX = (bb.min.x + bb.max.x) / 2;
+    const centerY = (bb.min.y + bb.max.y) / 2;
+    const frontZ = bb.max.z + 0.01;
+
+    if (!textPlaneRef.current && textConfig.text) {
+      const planeGeo = new THREE.PlaneGeometry(1, 1);
+      const initialTex = createTextTexture(textConfig.text, textConfig.color, textConfig.fontFamily, textConfig.size, textConfig.weight, textConfig.italic);
+      const mat = new THREE.MeshBasicMaterial({
+        map: initialTex,
+        transparent: true,
+        depthTest: true,
+        toneMapped: false,
+      });
+      const plane = new THREE.Mesh(planeGeo, mat);
+      plane.position.set(centerX + textConfig.offsetX, centerY + textConfig.offsetY, frontZ + 0.001);
+      plane.scale.set(width * textConfig.scale, height * textConfig.scale * 0.35, 1);
+      plane.renderOrder = 999;
+      body.add(plane);
+      textPlaneRef.current = plane;
+    } else if (textPlaneRef.current) {
+      const plane = textPlaneRef.current;
+      plane.position.set(centerX + textConfig.offsetX, centerY + textConfig.offsetY, frontZ + 0.001);
+      plane.scale.set(width * textConfig.scale, height * textConfig.scale * 0.35, 1);
+      const tex = createTextTexture(textConfig.text || "", textConfig.color, textConfig.fontFamily, textConfig.size, textConfig.weight, textConfig.italic);
+      if (plane.material.map) plane.material.map.dispose();
+      plane.material.map = tex;
+      plane.material.needsUpdate = true;
+    }
+
+    if (!logoPlaneRef.current && logoImage) {
+      const planeGeo = new THREE.PlaneGeometry(1, 1);
+      const img = new Image();
+      img.onload = () => {
+        const tex = createLogoTextureFromImage(img);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          depthTest: true,
+          toneMapped: false,
+        });
+        const plane = new THREE.Mesh(planeGeo, mat);
+        plane.position.set(centerX + logoConfig.offsetX, centerY + logoConfig.offsetY, frontZ + 0.002);
+        plane.scale.set(width * logoConfig.scale, height * logoConfig.scale, 1);
+        plane.rotation.z = logoConfig.rotation;
+        plane.renderOrder = 999;
+        body.add(plane);
+        logoPlaneRef.current = plane;
+      };
+      img.src = logoImage;
+    } else if (logoPlaneRef.current) {
+      const plane = logoPlaneRef.current;
+      plane.position.set(centerX + logoConfig.offsetX, centerY + logoConfig.offsetY, frontZ + 0.002);
+      plane.scale.set(width * logoConfig.scale, height * logoConfig.scale, 1);
+      plane.rotation.z = logoConfig.rotation;
+      if (logoImage) {
+        const img = new Image();
+        img.onload = () => {
+          const tex = createLogoTextureFromImage(img);
+          if (plane.material.map) plane.material.map.dispose();
+          plane.material.map = tex;
+          plane.material.needsUpdate = true;
+        };
+        img.src = logoImage;
+      } else {
+        if (plane.material.map) {
+          plane.material.map.dispose();
+          plane.material.map = null;
+          plane.material.needsUpdate = true;
+        }
+      }
+    }
+
+    return () => {
+      if (textPlaneRef.current) {
+        try {
+          const mat = textPlaneRef.current.material;
+          if (mat.map) mat.map.dispose();
+          mat.dispose();
+          if (body) body.remove(textPlaneRef.current);
+        } catch (e) {}
+        textPlaneRef.current = null;
+      }
+      if (logoPlaneRef.current) {
+        try {
+          const mat = logoPlaneRef.current.material;
+          if (mat.map) mat.map.dispose();
+          mat.dispose();
+          if (body) body.remove(logoPlaneRef.current);
+        } catch (e) {}
+        logoPlaneRef.current = null;
+      }
+    };
+  }, [textConfig, logoConfig, logoImage, scene]);
+
+  return <primitive object={scene} />;
 }
 
-// ---------------------------------------------------------
-// APPLY TEXT AS CANVAS TEXTURE
-// ---------------------------------------------------------
+export default function App() {
+  const [colors, setColors] = useState({
+    bodyFront: "#ff0000",
+    sleeves: "#00ff00",
+    pattern1: "#0000ff",
+  });
 
-function applyTextToMesh(mesh, text) {
-  ensureUVs(mesh);
+  const [text, setText] = useState("");
+  const [textColor, setTextColor] = useState("#000000");
+  const [fontFamily, setFontFamily] = useState(FONTS[0]);
+  const [fontSize, setFontSize] = useState(120);
+  const [fontWeight, setFontWeight] = useState("normal");
+  const [italic, setItalic] = useState(false);
+  const [textScale, setTextScale] = useState(0.9);
+  const [textOffsetX, setTextOffsetX] = useState(0);
+  const [textOffsetY, setTextOffsetY] = useState(0);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 1024;
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoURL, setLogoURL] = useState(null);
+  const [logoScale, setLogoScale] = useState(0.35);
+  const [logoOffsetX, setLogoOffsetX] = useState(0);
+  const [logoOffsetY, setLogoOffsetY] = useState(-0.05);
+  const [logoRotation, setLogoRotation] = useState(0);
 
-  const ctx = canvas.getContext("2d");
+  useEffect(() => {
+    return () => {
+      if (logoURL) URL.revokeObjectURL(logoURL);
+    };
+  }, [logoURL]);
 
-  ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const onLogoUpload = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) {
+      setLogoFile(null);
+      setLogoURL(null);
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setLogoFile(f);
+    setLogoURL(url);
+  };
 
-  ctx.fillStyle = "black";
-  ctx.font = "bold 120px Arial"; // Slightly larger font
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  const textConfig = {
+    text,
+    color: textColor,
+    fontFamily,
+    size: fontSize,
+    weight: fontWeight,
+    italic,
+    scale: textScale,
+    offsetX: textOffsetX,
+    offsetY: textOffsetY,
+  };
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.encoding = THREE.sRGBEncoding;
-  texture.needsUpdate = true;
+  const logoConfig = {
+    scale: logoScale,
+    offsetX: logoOffsetX,
+    offsetY: logoOffsetY,
+    rotation: logoRotation,
+  };
 
-  applyImageToMesh(mesh, texture);
+  return (
+    <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif" }}>
+      <div style={{ flex: 1, background: "#f6f8fb", padding: 24, overflowY: "auto", minWidth: 360 }}>
+        <h3 style={{ margin: 0, marginBottom: 12 }}>Customizer — Text & Logo</h3>
+
+        <section style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+          <h4 style={{ margin: "0 0 10px 0" }}>Text Controls</h4>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Text
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Enter custom text"
+              style={{ width: "100%", padding: 8, marginTop: 6 }}
+              maxLength={24}
+            />
+          </label>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <label style={{ flex: 1 }}>
+              Color
+              <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} style={{ width: "100%", height: 36, marginTop: 6 }} />
+            </label>
+
+            <label style={{ flex: 1 }}>
+              Font
+              <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} style={{ width: "100%", padding: 8, marginTop: 6 }}>
+                {FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={fontWeight === "bold"} onChange={(e) => setFontWeight(e.target.checked ? "bold" : "normal")} />
+              Bold
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={italic} onChange={(e) => setItalic(e.target.checked)} />
+              Italic
+            </label>
+          </div>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Size: {fontSize}px
+            <input type="range" min={40} max={220} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} style={{ width: "100%" }} />
+          </label>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Scale: {textScale.toFixed(2)}
+            <input type="range" min={0.2} max={1.6} step={0.01} value={textScale} onChange={(e) => setTextScale(Number(e.target.value))} style={{ width: "100%" }} />
+          </label>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <label style={{ flex: 1 }}>
+              Offset X: {textOffsetX.toFixed(2)}
+              <input type="range" min={-0.6} max={0.6} step={0.01} value={textOffsetX} onChange={(e) => setTextOffsetX(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              Offset Y: {textOffsetY.toFixed(2)}
+              <input type="range" min={-0.6} max={0.6} step={0.01} value={textOffsetY} onChange={(e) => setTextOffsetY(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+          </div>
+        </section>
+
+        <section style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+          <h4 style={{ margin: "0 0 10px 0" }}>Logo Upload & Controls</h4>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Upload Logo (PNG/JPG with transparency recommended)
+            <input type="file" accept="image/png,image/jpeg" onChange={onLogoUpload} style={{ width: "100%", marginTop: 8 }} />
+          </label>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <label style={{ flex: 1 }}>
+              Scale: {logoScale.toFixed(2)}
+              <input type="range" min={0.05} max={1.2} step={0.01} value={logoScale} onChange={(e) => setLogoScale(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              Rotation: {(logoRotation * (180 / Math.PI)).toFixed(0)}°
+              <input type="range" min={-Math.PI} max={Math.PI} step={0.01} value={logoRotation} onChange={(e) => setLogoRotation(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <label style={{ flex: 1 }}>
+              Offset X: {logoOffsetX.toFixed(2)}
+              <input type="range" min={-0.6} max={0.6} step={0.01} value={logoOffsetX} onChange={(e) => setLogoOffsetX(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              Offset Y: {logoOffsetY.toFixed(2)}
+              <input type="range" min={-0.6} max={0.6} step={0.01} value={logoOffsetY} onChange={(e) => setLogoOffsetY(Number(e.target.value))} style={{ width: "100%" }} />
+            </label>
+          </div>
+
+          {logoURL && (
+            <div style={{ marginTop: 10, padding: 8, background: "#fafafa", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "#666" }}>Preview</div>
+              <img src={logoURL} alt="logo-preview" style={{ maxWidth: "120px", maxHeight: "120px", marginTop: 6 }} />
+            </div>
+          )}
+        </section>
+
+        <section style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
+          <h4 style={{ margin: "0 0 10px 0" }}>Primary Colors</h4>
+          <div style={{ display: "flex", gap: 8 }}>
+            <label style={{ flex: 1 }}>
+              Body
+              <input type="color" value={colors.bodyFront} onChange={(e) => setColors((p) => ({ ...p, bodyFront: e.target.value }))} style={{ width: "100%", marginTop: 6, height: 36 }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              Sleeves
+              <input type="color" value={colors.sleeves} onChange={(e) => setColors((p) => ({ ...p, sleeves: e.target.value }))} style={{ width: "100%", marginTop: 6, height: 36 }} />
+            </label>
+            <label style={{ flex: 1 }}>
+              Pattern
+              <input type="color" value={colors.pattern1} onChange={(e) => setColors((p) => ({ ...p, pattern1: e.target.value }))} style={{ width: "100%", marginTop: 6, height: 36 }} />
+            </label>
+          </div>
+        </section>
+      </div>
+
+      <div style={{ flex: 2, background: "#fff", position: "relative" }}>
+        <Canvas camera={{ position: [0, 0, 2], fov: 50 }}>
+          <ambientLight intensity={1.2} />
+          <spotLight position={[5, 5, 5]} angle={0.15} intensity={1} />
+          <hemisphereLight skyColor={"#ffffff"} groundColor={"#888888"} intensity={0.8} />
+          <Suspense fallback={<Loader />}>
+            <Model
+              colors={colors}
+              textConfig={{
+                text,
+                color: textColor,
+                fontFamily,
+                size: fontSize,
+                weight: fontWeight,
+                italic,
+                scale: textScale,
+                offsetX: textOffsetX,
+                offsetY: textOffsetY,
+              }}
+              logoConfig={{
+                scale: logoScale,
+                offsetX: logoOffsetX,
+                offsetY: logoOffsetY,
+                rotation: logoRotation,
+              }}
+              logoImage={logoURL}
+            />
+          </Suspense>
+          <OrbitControls target={[0, 0, 0]} />
+        </Canvas>
+      </div>
+    </div>
+  );
 }
-
-// ---------------------------------------------------------
-// GLTF MODEL
-// ---------------------------------------------------------
-
-function Model({ colors, selectedMeshName }) {
-  const { scene } = useGLTF("/models/image_10.glb");
-  scene.position.set(0, -2, 0);
-
-  const highlightMaterial = useRef(
-    new THREE.MeshBasicMaterial({ 
-      color: 0xffff00, // Bright yellow for highlight
-      wireframe: true, 
-      transparent: true,
-      opacity: 0.5,
-      depthTest: false, // Ensure wireframe is always visible
-    })
-  );
-
-  useEffect(() => {
-    // Traverse scene to apply colors and handle highlighting
-    scene.traverse((child) => {
-      if (!child.isMesh) return;
-
-      // 1. Restore/Apply Customization Colors
-      if (child.userData.originalMaterial) {
-        // Restore original material if it was highlighted previously
-        child.material = child.userData.originalMaterial;
-        delete child.userData.originalMaterial;
-      }
-
-      // Apply preset colors (Only if the mesh wasn't customized via color picker)
-      if (child.name.includes("Body_Front_4_1")) setMeshColor(child, colors.bodyFront);
-      if (child.name.includes("Sleeves")) setMeshColor(child, colors.sleeves);
-      if (child.name.includes("Pattern")) setMeshColor(child, colors.pattern1);
-      
-      // 2. Apply Highlight
-      if (child.name === selectedMeshName) {
-        child.userData.originalMaterial = child.material; // Save original
-        child.material = highlightMaterial.current; // Apply highlight
-      }
-    });
-  }, [colors, selectedMeshName]);
-
-  return <primitive object={scene} />;
-}
-
-// ---------------------------------------------------------
-// SELECT MESH BY CLICK
-// ---------------------------------------------------------
-
-function SelectMesh({ setSelectedMesh }) {
-  const { scene, camera } = useThree();
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-
-  const onClick = (e) => {
-    // Standard normalized device coordinates (NDC) calculation
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    // Only intersect objects loaded by useGLTF (children of the main scene)
-    const hits = raycaster.intersectObjects(scene.children, true);
-
-    if (hits.length > 0) {
-      const mesh = hits[0].object;
-      
-      // Only select actual meshes
-      if (mesh.isMesh) {
-        ensureUVs(mesh); // Ensures we can apply textures later
-        setSelectedMesh(mesh);
-      }
-    } else {
-      // Deselect if user clicks on empty space
-      setSelectedMesh(null);
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener("click", onClick);
-    return () => window.removeEventListener("click", onClick);
-  }, [scene, camera]); // Dependencies to ensure raycaster uses current scene/camera
-
-  return null;
-}
-
-// ---------------------------------------------------------
-// MAIN APP
-// ---------------------------------------------------------
-
-function App() {
-  const [colors, setColors] = useState({
-    bodyFront: "#ff0000",
-    sleeves: "#00ff00",
-    pattern1: "#0000ff",
-  });
-
-  const [selectedMesh, setSelectedMesh] = useState(null);
-  const [userText, setUserText] = useState("");
-  const [uploadedImage, setUploadedImage] = useState(null);
-
-  // Display Name for Selected Mesh
-  const selectedMeshNameDisplay = selectedMesh 
-    ? friendlyNames[selectedMesh.name] || selectedMesh.name 
-    : "None";
-
-
-  // --- Customization Logic ---
-
-  // TEXT
-  useEffect(() => {
-    if (!selectedMesh) return;
-
-    // If text is present, override any image texture
-    if (userText.trim() !== "") {
-      applyTextToMesh(selectedMesh, userText);
-    } else if (!uploadedImage) {
-      // If text is cleared AND no image is present, clear the texture map
-      forEachMaterial(selectedMesh, (mat) => {
-        mat.map = null;
-        mat.needsUpdate = true;
-      });
-    }
-  }, [userText, selectedMesh, uploadedImage]);
-
-
-  // IMAGE
-  useEffect(() => {
-    if (!selectedMesh) return;
-
-    if (uploadedImage) {
-      // If image is uploaded, clear text input state to prioritize image
-      setUserText("");
-      const loader = new THREE.TextureLoader();
-      loader.load(uploadedImage, (texture) => {
-        texture.encoding = THREE.sRGBEncoding;
-        texture.needsUpdate = true;
-        applyImageToMesh(selectedMesh, texture);
-      });
-    }
-  }, [uploadedImage, selectedMesh]);
-
-  // COLOR PICKING
-  const handleColorChange = (e) => {
-    if (selectedMesh) setMeshColor(selectedMesh, e.target.value);
-  };
-
-  // CLEAR IMAGE handler
-  const clearImage = () => {
-    if (!selectedMesh) return;
-    setUploadedImage(null);
-    
-    // Restore to a null texture map
-    forEachMaterial(selectedMesh, (mat) => {
-      mat.map = null;
-      mat.needsUpdate = true;
-    });
-  };
-
-
-  return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      {/* Control Panel */}
-      <div
-        style={{
-          flex: 1,
-          background: "#f8f8f8",
-          padding: 30,
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 30,
-          boxShadow: "2px 0 5px rgba(0,0,0,0.1)",
-          minWidth: "350px",
-        }}
-      >
-        
-
-        {/* --- 1. MODEL PRESET COLORS (Primary Customization) --- */}
-        <div style={{ border: "1px solid #ccc", padding: 15, borderRadius: 8 }}>
-          <h4>Primary Color Scheme</h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              Body Front:
-              <input
-                type="color"
-                value={colors.bodyFront}
-                onChange={(e) =>
-                  setColors((p) => ({ ...p, bodyFront: e.target.value }))
-                }
-              />
-            </label>
-
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              Sleeves:
-              <input
-                type="color"
-                value={colors.sleeves}
-                onChange={(e) =>
-                  setColors((p) => ({ ...p, sleeves: e.target.value }))
-                }
-              />
-            </label>
-
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              Pattern/Logo Area:
-              <input
-                type="color"
-                value={colors.pattern1}
-                onChange={(e) =>
-                  setColors((p) => ({ ...p, pattern1: e.target.value }))
-                }
-              />
-            </label>
-          </div>
-        </div>
-
-
-
-        {/* --- 2. SELECTED MESH CUSTOMIZATION (Advanced) --- */}
-        <div style={{ border: "1px solid #007bff", padding: 15, borderRadius: 8, background: selectedMesh ? "#e6f2ff" : "none" }}>
-          <h4>Part-Specific Customization</h4>
-          <p style={{ fontWeight: "bold", color: selectedMesh ? "#007bff" : "#666" }}>
-            Selected Part: {selectedMeshNameDisplay}
-          </p>
-
-          {selectedMesh && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 15, marginTop: 15 }}>
-              {/* Color Picker */}
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                Part Color Override:
-                <input
-                  type="color"
-                  value={
-                    "#" +
-                    (Array.isArray(selectedMesh.material)
-                      ? selectedMesh.material[0].color.getHexString()
-                      : selectedMesh.material.color.getHexString())
-                  }
-                  onChange={handleColorChange}
-                />
-              </label>
-
-              <hr style={{ borderTop: "1px dashed #aaa" }} />
-
-              {/* Text Input */}
-              <label>
-                **Add Custom Text/Number:**
-                <input
-                  type="text"
-                  value={userText}
-                  onChange={(e) => setUserText(e.target.value)}
-                  placeholder="Enter Name or Number (e.g., TEAM 10)"
-                  style={{ width: "95%", padding: 5, marginTop: 5 }}
-                />
-              </label>
-
-              {/* Image Upload */}
-              <label>
-                **Upload Logo/Image:**
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5 }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) setUploadedImage(URL.createObjectURL(file));
-                    }}
-                  />
-                  {uploadedImage && (
-                    <button 
-                      onClick={clearImage} 
-                      style={{ padding: '5px 10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </label>
-            </div>
-          )}
-        </div>
-
-
-        
-      </div>
-
-      {/* Canvas */}
-      <div style={{ flex: 2, minHeight: "100vh", background: "#333" }}>
-        <Canvas camera={{ position: [0, 0, 2], fov: 50 }}>
-          <ambientLight intensity={1.5} />
-          <spotLight position={[5, 5, 5]} angle={0.15} intensity={1} />
-          <hemisphereLight
-            skyColor={"#ffffff"}
-            groundColor={"#888888"}
-            intensity={0.8}
-          />
-
-          <Suspense fallback={<Loader />}>
-            {/* Pass the name of the selected mesh for highlighting */}
-            <Model 
-              colors={colors} 
-              selectedMeshName={selectedMesh ? selectedMesh.name : null} 
-            />
-          </Suspense>
-
-          <OrbitControls target={[0, 0, 0]} />
-          <SelectMesh setSelectedMesh={setSelectedMesh} />
-        </Canvas>
-      </div>
-    </div>
-  );
-}
-
-export default App;
