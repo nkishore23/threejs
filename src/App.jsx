@@ -226,7 +226,7 @@ function Model({ colors, textConfig, logoConfig, logoImage }) {
 export default function App() {
   const [colors, setColors] = useState({
     bodyFront: "#ff0000",
-    sleeves: "#00ff00",
+    sleeves: "#00ffff",
     pattern1: "#0000ff",
   });
 
