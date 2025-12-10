@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>T-Shirt Customizer – Vanilla JS</title>
+
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      font-family: sans-serif;
+      background: #f6f8fb;
+    }
+    #controls {
+      width: 360px;
+      padding: 20px;
+      overflow-y: auto;
+      background: #fff;
+    }
+    #viewer {
+      flex: 1;
+      background: #ddd;
+    }
+    section {
+      margin-bottom: 18px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #fff;
+    }
+    input[type="range"] { width: 100%; }
+  </style>
+</head>
+
+<body>
+
+<div id="controls">
+
+  <h3>Customizer — Text & Logo</h3>
+
+  <!-- TEXT CONTROLS -->
+  <section>
+    <h4>Text Controls</h4>
+
+    <label>Text
+      <input id="textInput" type="text" maxlength="24" style="width:100%" />
+    </label>
+
+    <label>Text Color
+      <input id="textColor" type="color" value="#000000" style="width:100%;height:32px" />
+    </label>
+
+    <label>Font
+      <select id="fontFamily" style="width:100%">
+        <option>Arial</option>
+        <option>Impact</option>
+        <option>Roboto</option>
+        <option>Poppins</option>
+        <option>Times New Roman</option>
+        <option>Georgia</option>
+        <option>Courier New</option>
+        <option>Brush Script MT</option>
+      </select>
+    </label>
+
+    <label>Size: <span id="sizeVal">120</span>px
+      <input id="fontSize" type="range" min="40" max="220" value="120">
+    </label>
+
+    <label>Scale: <span id="textScaleVal">0.90</span>
+      <input id="textScale" type="range" min="0.2" max="1.6" step="0.01" value="0.9">
+    </label>
+
+    <label>Offset X: <span id="textOffsetXVal">0.00</span>
+      <input id="textOffsetX" type="range" min="-0.6" max="0.6" step="0.01" value="0">
+    </label>
+
+    <label>Offset Y: <span id="textOffsetYVal">0.00</span>
+      <input id="textOffsetY" type="range" min="-0.6" max="0.6" step="0.01" value="0">
+    </label>
+  </section>
+
+  <!-- LOGO CONTROLS -->
+  <section>
+    <h4>Logo Upload & Controls</h4>
+
+    <label>
+      Upload Logo
+      <input id="logoInput" type="file" accept="image/png,image/jpeg" style="width:100%">
+    </label>
+
+    <label>Scale: <span id="logoScaleVal">0.35</span>
+      <input id="logoScale" type="range" min="0.05" max="1.2" step="0.01" value="0.35">
+    </label>
+
+    <label>Rotation: <span id="logoRotVal">0°</span>
+      <input id="logoRot" type="range" min="-3.14" max="3.14" step="0.01" value="0">
+    </label>
+
+    <label>Offset X: <span id="logoOffsetXVal">0.00</span>
+      <input id="logoOffsetX" type="range" min="-0.6" max="0.6" step="0.01" value="0">
+    </label>
+
+    <label>Offset Y: <span id="logoOffsetYVal">-0.05</span>
+      <input id="logoOffsetY" type="range" min="-0.6" max="0.6" step="0.01" value="-0.05">
+    </label>
+  </section>
+
+  <!-- COLORS -->
+  <section>
+    <h4>Colors</h4>
+
+    <label>Body
+      <input id="bodyColor" type="color" value="#ff0000" style="width:100%;height:32px">
+    </label>
+
+    <label>Sleeves
+      <input id="sleevesColor" type="color" value="#00ffff" style="width:100%;height:32px">
+    </label>
+
+    <label>Pattern
+      <input id="patternColor" type="color" value="#0000ff" style="width:100%;height:32px">
+    </label>
+  </section>
+
+</div>
+
+<div id="viewer"></div>
+
+<!-- Three.js r118 (Stable with OrbitControls) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.118/build/three.min.js"></script>
+
+<!-- Working OrbitControls -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.118/examples/js/controls/OrbitControls.js"></script>
+
+<!-- GLTFLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.118/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+/* -----------------------------------
+      INITIAL SETUP
+-------------------------------------*/
+let scene = new THREE.Scene();
+
+let renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth - 360, window.innerHeight);
+document.getElementById("viewer").appendChild(renderer.domElement);
+
+let camera = new THREE.PerspectiveCamera(
+  50,
+  (window.innerWidth - 360) / window.innerHeight,
+  0.1,
+  100
+);
+camera.position.set(0, 0, 2);
+
+// FIXED CONTROLS
+let controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+
+/* -----------------------------------
+      LIGHTS
+-------------------------------------*/
+scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+let spot = new THREE.SpotLight(0xffffff, 1);
+spot.position.set(5, 5, 5);
+scene.add(spot);
+
+
+/* -----------------------------------
+      LOAD MODEL
+-------------------------------------*/
+let tshirtBody = null;
+let textPlane = null;
+let logoPlane = null;
+
+let loader = new THREE.GLTFLoader();
+loader.load("models/image_10.glb", glb => {
+  let model = glb.scene;
+  model.position.y = -2;
+
+  model.traverse(child => {
+    if (child.isMesh && child.name.includes("Body_Front")) {
+      tshirtBody = child;
+      child.geometry.computeBoundingBox();
+    }
+  });
+
+  scene.add(model);
+});
+
+
+/* -----------------------------------
+      TEXT TEXTURE
+-------------------------------------*/
+function makeTextTexture(text) {
+  let canvas = document.createElement("canvas");
+  canvas.width = 2048;
+  canvas.height = 1024;
+
+  let ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = fontSize.value + "px " + fontFamily.value;
+  ctx.fillStyle = textColor.value;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+
+function updateText() {
+  if (!tshirtBody) return;
+
+  if (!textPlane) {
+    let geo = new THREE.PlaneGeometry(1, 1);
+    let mat = new THREE.MeshBasicMaterial({ transparent: true });
+    textPlane = new THREE.Mesh(geo, mat);
+    tshirtBody.add(textPlane);
+  }
+
+  textPlane.material.map = makeTextTexture(textInput.value);
+
+  let bb = tshirtBody.geometry.boundingBox;
+  let W = bb.max.x - bb.min.x;
+  let H = bb.max.y - bb.min.y;
+
+  textPlane.position.set(
+    Number(textOffsetX.value),
+    Number(textOffsetY.value),
+    bb.max.z + 0.01
+  );
+
+  textPlane.scale.set(
+    W * Number(textScale.value),
+    H * Number(textScale.value) * 0.35,
+    1
+  );
+}
+
+
+/* -----------------------------------
+      LOGO FUNCTIONS
+-------------------------------------*/
+let logoImg = new Image();
+
+function makeLogoTexture(img) {
+  let canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 1024;
+
+  let ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, 1024, 1024);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+function updateLogo() {
+  if (!tshirtBody) return;
+
+  if (!logoPlane) {
+    let geo = new THREE.PlaneGeometry(1, 1);
+    let mat = new THREE.MeshBasicMaterial({ transparent: true });
+    logoPlane = new THREE.Mesh(geo, mat);
+    tshirtBody.add(logoPlane);
+  }
+
+  logoPlane.material.map = makeLogoTexture(logoImg);
+
+  let bb = tshirtBody.geometry.boundingBox;
+  let W = bb.max.x - bb.min.x;
+  let H = bb.max.y - bb.min.y;
+
+  logoPlane.position.set(
+    Number(logoOffsetX.value),
+    Number(logoOffsetY.value),
+    bb.max.z + 0.02
+  );
+
+  logoPlane.scale.set(
+    W * Number(logoScale.value),
+    H * Number(logoScale.value),
+    1
+  );
+
+  logoPlane.rotation.z = Number(logoRot.value);
+}
+
+
+/* -----------------------------------
+      COLOR CHANGE
+-------------------------------------*/
+function applyColor(mesh, color) {
+  if (!mesh) return;
+  mesh.material.color.set(color);
+}
+
+
+/* -----------------------------------
+      EVENT LISTENERS
+-------------------------------------*/
+
+textInput.oninput = updateText;
+textColor.oninput = updateText;
+fontFamily.onchange = updateText;
+
+fontSize.oninput = () => { sizeVal.innerText = fontSize.value; updateText(); };
+textScale.oninput = () => { textScaleVal.innerText = textScale.value; updateText(); };
+textOffsetX.oninput = () => { textOffsetXVal.innerText = textOffsetX.value; updateText(); };
+textOffsetY.oninput = () => { textOffsetYVal.innerText = textOffsetY.value; updateText(); };
+
+logoScale.oninput = () => { logoScaleVal.innerText = logoScale.value; updateLogo(); };
+logoRot.oninput = () => { logoRotVal.innerText = Math.round(logoRot.value * 57) + "°"; updateLogo(); };
+logoOffsetX.oninput = () => { logoOffsetXVal.innerText = logoOffsetX.value; updateLogo(); };
+logoOffsetY.oninput = () => { logoOffsetYVal.innerText = logoOffsetY.value; updateLogo(); };
+
+logoInput.onchange = e => {
+  let file = e.target.files[0];
+  if (!file) return;
+  let url = URL.createObjectURL(file);
+  logoImg.onload = updateLogo;
+  logoImg.src = url;
+};
+
+bodyColor.oninput = () => applyColor(tshirtBody, bodyColor.value);
+sleevesColor.oninput = () => applyColor(tshirtBody, sleevesColor.value);
+patternColor.oninput = () => applyColor(tshirtBody, patternColor.value);
+
+
+/* -----------------------------------
+      RENDER LOOP
+-------------------------------------*/
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+</script>
+
+</body>
+</html>
